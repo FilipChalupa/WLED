@@ -202,8 +202,13 @@ Firmwaru nevadí, že D/E vedou nikam — pořád je obsluhuje, jen nejsou přip
 | rows × cols | **1 × 3** |
 | Reversed | nezaškrtnuto |
 
-Pak **Config → 2D Configuration → Strip or panel → 2D Matrix** (rozměry 192×32), Save.
-Bez toho WLED renderuje jen 1D.
+Pak **Config → 2D Configuration → Strip or panel → 2D Matrix**, Save. Bez toho WLED renderuje jen 1D.
+
+> ⚠️ **2D matrix = JEDEN panel 192×32, NE tři dlaždice 64×32!** HUB75 bus si ty tři moduly
+> skládá dovnitř sám (VirtualMatrixPanel + chain). Když v Matrix Generatoru uděláš 3 dlaždice
+> (Horizontal 3), ledmapa pixely přerovná ještě jednou a pere se to s tím, jak bus čte buffer
+> řádkově přes celých 192 → **text roztržený na tři kusy**. Správně: definuj v 2D jednu plochu
+> 192×32 (Matrix Dimensions má ukázat `192 x 32 = 6144`). Ověřeno.
 
 #### Zapojení řetězu (3 moduly)
 
