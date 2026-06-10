@@ -802,10 +802,11 @@ BusHub75Matrix::BusHub75Matrix(const BusConfig &bc) : Bus(bc.type, bc.start, bc.
   _hasRgb = true;
   _hasWhite = false;
   virtualDisp = nullptr; // todo: this should be solved properly, can cause memory leak (if omitted here, nothing seems to work)
+  _isVirtual = false;
   // aliases for easier reading
-  uint8_t panelWidth  = bc.pins[0];
-  uint8_t panelHeight = bc.pins[1];
-  uint8_t chainLength = bc.pins[2];
+  unsigned panelWidth  = bc.pins[0];
+  unsigned panelHeight = bc.pins[1];
+  unsigned chainLength = bc.pins[2];
   _rows = bc.pins[3];
   _cols = bc.pins[4];
 
@@ -821,7 +822,7 @@ BusHub75Matrix::BusHub75Matrix(const BusConfig &bc) : Bus(bc.type, bc.start, bc.
 
   mxconfig.clkphase = bc.reversed;
   // allow chain length up to 4, limit to prevent bad data from preventing boot due to low memory
-  mxconfig.chain_length = max((uint8_t) 1, min(chainLength, (uint8_t) 4));
+  mxconfig.chain_length = max(1U, min(chainLength, 4U));
 
   if (mxconfig.mx_height >= 64 && (mxconfig.chain_length > 1)) {
     DEBUGBUS_PRINTLN(F("WARNING, only single panel can be used of 64 pixel boards due to memory"));
@@ -829,12 +830,13 @@ BusHub75Matrix::BusHub75Matrix(const BusConfig &bc) : Bus(bc.type, bc.start, bc.
   }
 
   if (bc.type == TYPE_HUB75MATRIX_HS) {
-      mxconfig.mx_width = min((uint8_t) 64, panelWidth); // TODO: UI limit is 128, this limits to 64
-      mxconfig.mx_height = min((uint8_t) 64, panelHeight);
+      mxconfig.mx_width = min(128U, panelWidth); // UI limit is 128
+      mxconfig.mx_height = min(64U, panelHeight);
   } else if (bc.type == TYPE_HUB75MATRIX_QS) {
       _isVirtual = true;
-      mxconfig.mx_width = min((uint8_t) 64, panelWidth) * 2;
-      mxconfig.mx_height = min((uint8_t) 64, panelHeight) / 2;
+      mxconfig.mx_width = min(128U, panelWidth) * 2;
+      mxconfig.mx_height = min(64U, panelHeight) / 2;
+      mxconfig.driver = HUB75_I2S_CFG::FM6124;  // use FM6124 for "outdoor" 4-scan panels - workaround until driver is user-configurable
   } else {
     DEBUGBUS_PRINTLN("Unknown type");
     return;
@@ -1000,15 +1002,15 @@ BusHub75Matrix::BusHub75Matrix(const BusConfig &bc) : Bus(bc.type, bc.start, bc.
   // chained panels with cols and rows define need the virtual display driver, so do quarter-scan panels
   if (chainLength > 1 && (_rows > 1 || _cols > 1) || bc.type == TYPE_HUB75MATRIX_QS) {
     _isVirtual = true;
-    chainType = CHAIN_BOTTOM_LEFT_UP; // TODO: is there any need to support other chaining types?
-    DEBUGBUS_PRINTF_P(PSTR("Using virtual matrix: %ux%u panels of %ux%u pixels\n"), _cols, _rows, mxconfig.mx_width, mxconfig.mx_height);
+    if (chainLength > 1 && (_rows > 1 || _cols > 1)) chainType = CHAIN_TOP_RIGHT_DOWN; // we need a _DOWN chainType, otherwise the display is upside-down
+    DEBUGBUS_PRINTF_P(PSTR("Using virtual matrix: %ux%u panels of %ux%u pixels\n"), _cols, _rows, mxconfig.mx_width/2, mxconfig.mx_height*2);
   }
   else {
     _isVirtual = false;
   }
 
   if (_isVirtual) {
-    virtualDisp = new VirtualMatrixPanel((*display), _rows, _cols, mxconfig.mx_width, mxconfig.mx_height, chainType);
+    virtualDisp = new VirtualMatrixPanel((*display), _rows, _cols, mxconfig.mx_width/2, mxconfig.mx_height*2, chainType);
     virtualDisp->setRotation(0);
     if (bc.type == TYPE_HUB75MATRIX_QS) {
       switch(panelHeight) {
@@ -1079,7 +1081,7 @@ void IRAM_ATTR BusHub75Matrix::setPixelColor(unsigned pix, uint32_t c) {
 uint32_t BusHub75Matrix::getPixelColor(unsigned pix) const {
   if (!_valid) return IS_BLACK; // note: no need to check pix >= _len as that is checked in containsPixel()
   if (_ledBuffer)
-    return uint32_t(_ledBuffer[pix]);
+    return uint32_t(_ledBuffer[pix]) & 0x00FFFFFF;  // FastLED 32bit is RGBA, we need RGBW
   else
     return getBitFromArray(_ledsDirty, pix) ? IS_DARKGREY: IS_BLACK;   // just a hack - we only know if the pixel is black or not
 }
@@ -1144,18 +1146,11 @@ std::vector<LEDType> BusHub75Matrix::getLEDTypes() {
 
 size_t BusHub75Matrix::getPins(uint8_t* pinArray) const {
   if (pinArray) {
-    // Return the logical panel dimensions the user entered, reversing the
-    // physical transform applied in the constructor. Quarter-scan stores
-    // mx_width = width*2 and mx_height = height/2, so without this the saved
-    // config would be re-transformed on every save/reboot (height halves each
-    // time: 32 -> 16 -> 8 -> ...), eventually hitting "Unsupported height".
-    if (getType() == TYPE_HUB75MATRIX_QS) {
-      pinArray[0] = mxconfig.mx_width / 2;
-      pinArray[1] = mxconfig.mx_height * 2;
-    } else {
-      pinArray[0] = mxconfig.mx_width;
-      pinArray[1] = mxconfig.mx_height;
-    }
+    // return logical (user-entered) dimensions, reversing the physical transform
+    // done in the constructor; otherwise the saved cfg gets re-transformed each
+    // save/reboot (panels go "flatter" every time).
+    pinArray[0] = _isVirtual ? mxconfig.mx_width  / 2 : mxconfig.mx_width;
+    pinArray[1] = _isVirtual ? mxconfig.mx_height * 2 : mxconfig.mx_height;
     pinArray[2] = mxconfig.chain_length;
     pinArray[3] = _rows;
     pinArray[4] = _cols;

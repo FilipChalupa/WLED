@@ -184,10 +184,13 @@ Takže:
 
 Firmwaru nevadí, že D/E vedou nikam — pořád je obsluhuje, jen nejsou připojené.
 
-**Sestava: 3× modul 64×32 v řadě zleva doprava = celkem 192×32.** Každý modul je
-1/8-scan, výška 32 → ve WLED **HUB75 (Quarter Scan)** (32/4 = 8). Pravidlo: 1/8-scan
-panel vysoký 32 px = Quarter Scan; vysoký 16 px = Half Scan. (Pozor: Quarter Scan
-podporuje jen výšky 16/32/64 — jiná výška = „Unsupported height" a driver se zastaví.)
+**Sestava: 3× modul 64×32 v řadě zleva doprava = celkem 192×32.**
+
+> ✅ **OVĚŘENO: tenhle panel jede správně na HUB75 (Quarter Scan)** — ale až s upstream
+> 4-scan fixy (viz Troubleshooting → „4-scan panel"). Bez nich Quarter Scan svítil jen
+> půlku a Half Scan házel řádky do 4 pásem. S fixy (správné rozměry VirtualMatrixPanel
+> + FM6124 driver) je v Quarter Scan celá plocha a řádky sedí. Pozn.: typ konektoru
+> (1/8-scan, A,B,C, D=NC) tady ladí s teorií, ale rozhodl až reálný test scrolling textem.
 
 #### Nastavení v UI (Config → LED Preferences → LED outputs)
 
@@ -207,10 +210,19 @@ Bez toho WLED renderuje jen 1D.
 ESP32 → jen **vstup prvního modulu** (13 vodičů + GND). Dál se moduly řetězí plochým
 kabelem: OUT modulu 1 → IN modulu 2 → OUT modulu 2 → IN modulu 3.
 
-> Když obraz vyjde rozsekaný/zdvojený, zkus přepnout na **Half Scan** (empirický test).
-> Špatné pořadí/zrcadlení modulů → **Reversed** nebo doladit v 2D mapě. Prohozené barvy
-> (R↔B) → color order RGB↔BGR. Half Scan = běžné panely (scan = výška/2), Quarter Scan
-> = FOUR_SCAN panely s remappingem (scan = výška/4).
+#### Orientace / barvy
+
+- Text otočený o 180° („nohama vzhůru") → **fyzicky otoč panel**, nebo v 2D Configuration
+  přes „1st panel" (Bottom/Right) / rotaci. Pozor: fyzické otočení spraví jen čistou
+  rotaci; **zrcadlení** (čitelné pozpátku) se řeší orientací v 2D configu, ne otočením.
+- Špatné pořadí modulů → **Reversed** / 2D mapa. Prohozené barvy (R↔B) → color order RGB↔BGR.
+
+#### Pozn. k typům scanu (referenčně)
+
+Half Scan = `NORMAL_TWO_SCAN` (scan = výška/2). Quarter Scan = FOUR_SCAN panely
+s remappingem (scan = výška/4), podporuje jen výšky 16/32/64 (jinak „Unsupported height").
+Knihovna umí varianty `FOUR_SCAN_32PX_HIGH` (WLED default pro v32), `FOUR_SCAN_16PX_HIGH`,
+`FOUR_SCAN_64PX_HIGH`, `FOUR_SCAN_40PX_HIGH` — ale náš panel správně jede na Half Scan.
 
 **Pozn. k volbě pinů (proč to nezlobí):**
 - Vyhýbá se flash pinům (26–32), **octal-PSRAM pinům (33–37)** i USB pinům (19, 20) — proto OK pro N8R8.
@@ -279,6 +291,13 @@ Padá ještě **před** druhým stupněm bootloaderu = ROM nedokáže číst fla
 3. Špatný COM port pro log — u S3 s nativním USB jdou ROM logy přes USB-Serial-JTAG;
    po bootu se může číslo COM portu změnit (zkontroluj Správce zařízení).
 
+### Panel zčerná po změně HUB75 nastavení
+
+Po změně typu scanu nebo rozměrů a Save panel **zčerná a zůstane černý** — DMA/I2S
+driver matice se za běhu čistě nepřeinicializuje. **Řešení: rebootovat** (Config →
+Security → Reboot, nebo odpoj/zapoj napájení). Debug smyčka tedy je:
+**změna → Save → reboot → teprve pak hodnotit.**
+
 ### Quarter Scan: rozměry se po uložení samy mění (32 → 16 → 8 …)
 
 **Příznak:** zadáš Panel `64×32`, dáš Save, a ono se to přepne na `128×8` (a panel
@@ -297,6 +316,26 @@ firmwaru zadej `64×32` znovu (přepíše starou špatnou hodnotu v configu).
 
 > Pozn.: tohle je úprava zdrojáku WLED (ne jen `platformio_override.ini`) — při update
 > WLED z upstreamu ji bude potřeba znovu aplikovat (nebo poslat jako PR).
+
+### 4-scan panel: půlka / scramble / vzhůru nohama (upstream fixy)
+
+Naše base (16.0.0) má v `BusHub75Matrix` několik bugů pro 4-scan (Quarter Scan) panely.
+Upstream větev **`origin/hub75_4scan_bugfixes`** je opravuje. Je 272 commitů před námi
+(novější main), takže **nemergovat celou** — vyzobat jen tyhle cílené změny do
+`wled00/bus_manager.cpp` (aplikováno v našem buildu):
+
+- **VirtualMatrixPanel se skutečnými rozměry** `mx_width/2, mx_height*2` (commit `c530e13`)
+  — bez toho se vykresluje jen půlka panelu.
+- **`CHAIN_TOP_RIGHT_DOWN`** místo `CHAIN_BOTTOM_LEFT_UP` (jen pro chain > 1) — jinak obraz vzhůru nohama.
+- **FM6124 driver pro QS panely** (`mxconfig.driver = HUB75_I2S_CFG::FM6124;`, commit `f1a99ce`)
+  — pro „outdoor" 4-scan panely (proti tmavosti / pastelovým barvám).
+- `getPins` přes `_isVirtual` (rozměry se nepůlí při ukládání), `unsigned` typy
+  (proti přetečení u 128px), width do 128px, `getPixelColor` maska `& 0x00FFFFFF`.
+
+> Klíčové commity na větvi: `c530e13` (driver setup), `f1a99ce` (128px + FM6124),
+> `1ee4c617` (8-bit wrap 128x64), `32412c9a` (getPixelColor), `174ff022` (gamma hotfix —
+> netýká se bus_manager, zatím nebráno). Při update WLED z upstreamu, kde už jsou
+> mergnuté, tyhle ruční úpravy zahodit.
 
 ### WLED-AP se neobjeví
 - Dej **fyzický RESET** (tlačítko) — „Hard resetting via RTS pin" u nativního USB často nezabere.
