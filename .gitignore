@@ -20,7 +20,8 @@ platformio_release.ini
 replace_fs.py
 wled-update.sh
 
-/build_output/
+/build_output/map/
+/build_output/firmware/
 /node_modules/
 /logs/
 
