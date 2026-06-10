@@ -1144,8 +1144,18 @@ std::vector<LEDType> BusHub75Matrix::getLEDTypes() {
 
 size_t BusHub75Matrix::getPins(uint8_t* pinArray) const {
   if (pinArray) {
-    pinArray[0] = mxconfig.mx_width;
-    pinArray[1] = mxconfig.mx_height;
+    // Return the logical panel dimensions the user entered, reversing the
+    // physical transform applied in the constructor. Quarter-scan stores
+    // mx_width = width*2 and mx_height = height/2, so without this the saved
+    // config would be re-transformed on every save/reboot (height halves each
+    // time: 32 -> 16 -> 8 -> ...), eventually hitting "Unsupported height".
+    if (getType() == TYPE_HUB75MATRIX_QS) {
+      pinArray[0] = mxconfig.mx_width / 2;
+      pinArray[1] = mxconfig.mx_height * 2;
+    } else {
+      pinArray[0] = mxconfig.mx_width;
+      pinArray[1] = mxconfig.mx_height;
+    }
     pinArray[2] = mxconfig.chain_length;
     pinArray[3] = _rows;
     pinArray[4] = _cols;

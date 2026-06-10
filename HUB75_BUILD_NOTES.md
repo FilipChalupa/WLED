@@ -279,6 +279,25 @@ Padá ještě **před** druhým stupněm bootloaderu = ROM nedokáže číst fla
 3. Špatný COM port pro log — u S3 s nativním USB jdou ROM logy přes USB-Serial-JTAG;
    po bootu se může číslo COM portu změnit (zkontroluj Správce zařízení).
 
+### Quarter Scan: rozměry se po uložení samy mění (32 → 16 → 8 …)
+
+**Příznak:** zadáš Panel `64×32`, dáš Save, a ono se to přepne na `128×8` (a panel
+přestane fungovat / „Unsupported height").
+
+**Příčina (bug ve stock WLED):** pro Quarter Scan konstruktor přepočítá rozměry na
+fyzické (`mx_width = šířka×2`, `mx_height = výška÷2`), ale `BusHub75Matrix::getPins()`
+vrací do configu právě tyhle **přepočtené** hodnoty. Při každém uložení/bootu se
+přepočítají znovu → výška se půlí (32 → 16 → 8 → 4). Navíc se z `panelHeight` vybírá
+scan režim (case 16/32/64), takže po pár cyklech spadne do „Unsupported height".
+
+**Fix (aplikovaný v našem buildu):** `getPins()` v [bus_manager.cpp:1145](wled00/bus_manager.cpp#L1145)
+upraven tak, aby pro Quarter Scan vracel **logické** rozměry (obrácení přepočtu:
+`mx_width/2`, `mx_height*2`). Pak je `64×32` stabilní napříč rebooty. Po aktualizaci
+firmwaru zadej `64×32` znovu (přepíše starou špatnou hodnotu v configu).
+
+> Pozn.: tohle je úprava zdrojáku WLED (ne jen `platformio_override.ini`) — při update
+> WLED z upstreamu ji bude potřeba znovu aplikovat (nebo poslat jako PR).
+
 ### WLED-AP se neobjeví
 - Dej **fyzický RESET** (tlačítko) — „Hard resetting via RTS pin" u nativního USB často nezabere.
 - SSID `WLED-AP`, heslo `wled1234`; chvíli to po prvním bootu trvá. Zkus jiné zařízení (mobil).
