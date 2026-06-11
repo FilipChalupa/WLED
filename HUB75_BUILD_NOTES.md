@@ -342,6 +342,39 @@ Upstream větev **`origin/hub75_4scan_bugfixes`** je opravuje. Je 272 commitů p
 > netýká se bus_manager, zatím nebráno). Při update WLED z upstreamu, kde už jsou
 > mergnuté, tyhle ruční úpravy zahodit.
 
+### Víc než 4 panely + plochá matice > 255 px (vlastní patch — 5 panelů)
+
+Stock WLED neumí HUB75 řetěz delší než **4 panely** ani 2D plochu širší než **255 px**.
+Pro **5 modulů 64×32 = plochá matice 320×32** jsme upravili zdroják (vše v našem buildu;
+**při upstream update WLED znovu aplikovat / poslat jako PR**):
+
+| Co | Soubor:řádek | Změna |
+|----|--------------|-------|
+| HUB75 chain cap | [bus_manager.cpp:825](wled00/bus_manager.cpp#L825) | `min(chainLength, 4U)` → `5U` |
+| UI: počet panelů ve sběrnici | `data/settings_leds.htm` (`LC.max` v HUB75 větvi L2/L3/L4, ~ř. 440) | `4` → `5` |
+| Typ rozměru panelu | [FX.h:974-975](wled00/FX.h#L974-L975) | `uint8_t width/height` → `uint16_t` |
+| UI: rozměr panelu 2D | `data/settings_2D.htm:65` (per-panel) + `:269` (generátor) | `255` / `128` → `512` |
+
+**Proč `uint16_t`:** `Panel.width/height` byly `uint8_t`, takže 320 přeteklo na 64
+(320 − 256). Projevilo se to jako „2D konfigurace se resetuje na 64 px" + červené pole 320
+v Matrix Generatoru. Truncation byl na [set.cpp:864-865](wled00/set.cpp#L864-L865)
+(`p.width = ...toInt()` do bytu). Offsety (`xOffset/yOffset`) už `uint16_t` byly — v UI
+zůstaly na `max=255`, pro jeden panel na pozici 0,0 to nevadí.
+
+**Nastavení v UI:** LED Preferences → HUB75, panel 64×32, **No. of Panels 5, rows×cols 1×5**.
+2D Configuration → **jeden panel 320×32 (= 10240)**, NE 5 dlaždic (dlaždice trhají text —
+viz ⚠️ v sekci 5). Po Save **reboot**.
+
+**Color depth:** ořez na 3-bit nad 192 px ([bus_manager.cpp:847-849](wled00/bus_manager.cpp#L847-L849))
+je v `#if defined(CONFIG_IDF_TARGET_ESP32) || ...S2` — **S3 ho přeskakuje a jede plnou 8-bit barvu
+i na 320 px.** Ověřeno: Free PSRAM ~8 MB volné, ~43 FPS, Total LEDs 10240.
+
+> Pozn. k OTA: aktuálně běžící build má `WLED_RELEASE_NAME="S3_HUB75"` (env `s3_hub75`
+> v `platformio_override.ini`). To se **rozchází** s názvem `esp32s3_n8r8_hub75` /
+> `ESP32-S3_N8R8_HUB75` zmíněným v sekci 1 výše — OTA porovnává release name, takže
+> nahrávej biny pojmenované `*_S3_HUB75.bin`, jinak hlásí mismatch (nebo zaškrtni
+> „Ignore firmware validation").
+
 ### WLED-AP se neobjeví
 - Dej **fyzický RESET** (tlačítko) — „Hard resetting via RTS pin" u nativního USB často nezabere.
 - SSID `WLED-AP`, heslo `wled1234`; chvíli to po prvním bootu trvá. Zkus jiné zařízení (mobil).
