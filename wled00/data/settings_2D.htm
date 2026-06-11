@@ -62,7 +62,7 @@ Orientation: <select name="P${i}V" oninput="UI()">
 	<option value="1">Vertical</option>
 </select><br>
 Serpentine: <input type="checkbox" name="P${i}S" oninput="UI()"><br>
-Dimensions (WxH): <input name="P${i}W" type="number" min="1" max="255" value="${pw}" oninput="UI()"> x <input name="P${i}H" type="number" min="1" max="255" value="${ph}" oninput="UI()"><br>
+Dimensions (WxH): <input name="P${i}W" type="number" min="1" max="512" value="${pw}" oninput="UI()"> x <input name="P${i}H" type="number" min="1" max="512" value="${ph}" oninput="UI()"><br>
 Offset X: <input name="P${i}X" type="number" min="0" max="255" value="0" oninput="UI()">
 Y: <input name="P${i}Y" type="number" min="0" max="255" value="0" oninput="UI()"><br><i>(offset from top-left corner in # LEDs)</i>
 <br><br></div>`;
@@ -266,7 +266,7 @@ Y: <input name="P${i}Y" type="number" min="0" max="255" value="0" oninput="UI()"
 	<div class="sec">
 		<h3>Matrix Generator <button type="button" id="expGen" onclick="expand(this,gId('mxGen'));">&gt;</button></h3>
 		<div id="mxGen" style="display:none;">
-			Panel dimensions (WxH): <input name="PW" type="number" min="1" max="128" value="8"> x <input name="PH" type="number" min="1" max="128" value="8"><br>
+			Panel dimensions (WxH): <input name="PW" type="number" min="1" max="512" value="8"> x <input name="PH" type="number" min="1" max="512" value="8"><br>
 			Horizontal panels: <input name="MPH" type="number" min="1" max="8" value="1">
 			Vertical panels: <input name="MPV" type="number" min="1" max="8" value="1"><br>
 			1<sup>st</sup> panel: <select name="PB">
