@@ -356,6 +356,30 @@ Pro **5 modulů 64×32 = plochá matice 320×32** jsme upravili zdroják (vše v
 | UI: rozměr panelu 2D | `data/settings_2D.htm:65` (per-panel) + `:269` (generátor) | `255` / `128` → `512` |
 | 2D bounds check (revert do 1D!) | [FX_2Dfcn.cpp:38](wled00/FX_2Dfcn.cpp#L38) | `maxWidth/maxHeight > 255` → `> 512` |
 | ledmap.json clamp šířky/výšky | [FX_fcn.cpp:2048-2049](wled00/FX_fcn.cpp#L2048-L2049) | `min(...,255)` → `min(...,512)` |
+| **QS row-swap** (panel-specifické) | [bus_manager.cpp](wled00/bus_manager.cpp) `show()` + `setPixelColor()` | za flagem `-D WLED_HUB75_QS_ROW_SWAP=8`: `y ^= 8` v QS cestě |
+
+### QS row-swap — panel-specifická oprava (5-blokový sign)
+
+**Symptom:** všechny řádky svítí, ale jsou **přeházené po 8-řádkových pásech** (0–7↔8–15, 16–23↔24–31).
+Testovací vzor (4 barevné pásy přes API) ukázal pořadí GRWB místo RGBW; jemnější 8-pásový
+test potvrdil, že fyzický řádek `p` zobrazuje logický `p XOR 8`, uvnitř pásů pořadí OK.
+
+**Příčina:** tenhle konkrétní kus panelu (jiný než původní 3-blokový, i když vypadá stejně)
+má interní řádkový layout prohozený o `XOR 8` vůči tomu, co čeká `FOUR_SCAN_32PX_HIGH`.
+**Není to zapojení** — žádná permutace A/B/C to nesrovná (ověřeno), je to scan layout panelu.
+
+**Fix:** `-D WLED_HUB75_QS_ROW_SWAP=8` → ve [bus_manager.cpp](wled00/bus_manager.cpp) v `show()`
+i `setPixelColor()` se pro QS panely před `drawPixelRGB888` aplikuje `y ^= 8`. Per-panel v ose Y,
+takže funguje pro libovolnou šířku (1 i 5 panelů). Hodnota = výška/4 (pro 32px panel = 8).
+
+> ⚠️ Platí **jen pro tenhle typ panelu.** Původní 3-blokový sign to NEpotřeboval — kdybys ho
+> použil, flag vyhoď. Diagnostika: přes `/json/state` poslat 4 barevné vodorovné pásy
+> (segmenty se startY/stopY) a porovnat fyzický panel s Peekem.
+
+**Pozn. k ladění:** WLED segmenty se přes API **nepřepisují, jen přidávají** — po vícepásovém
+testu zůstanou staré segmenty viset a kontaminují další test. Při změně počtu pásů smaž přebytečné
+(`{"id":N,"stop":0}`). A `/edit` (nahrání ledmap.json) je v téhle buildu **vypnuté** (404) — proto
+řešeno ve firmwaru, ne ledmapou.
 
 > **Symptom bez `FX_2Dfcn.cpp:38` fixu:** 2D Configuration po **Save spadne zpátky na „1D Strip".**
 > `setUpMatrix()` spočítá `maxWidth=320 > 255` → „2D Bounds error" → `isMatrix=false`.

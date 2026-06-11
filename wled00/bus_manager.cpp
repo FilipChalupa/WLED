@@ -1069,6 +1069,10 @@ void IRAM_ATTR BusHub75Matrix::setPixelColor(unsigned pix, uint32_t c) {
     if (virtualDisp != nullptr) {
       int x = pix % _panelWidth; // TODO: check if using & and shift would be faster here, it limits to power-of-2 widths though
       int y = pix / _panelWidth;
+#ifdef WLED_HUB75_QS_ROW_SWAP
+      // panel-specific: some 1/8-scan QS panels have their 8-row bands swapped vs FOUR_SCAN_32PX_HIGH
+      if (getType() == TYPE_HUB75MATRIX_QS) y ^= WLED_HUB75_QS_ROW_SWAP;
+#endif
       virtualDisp->drawPixelRGB888(int16_t(x), int16_t(y), r, g, b);
     } else {
       int x = pix % _panelWidth;
@@ -1105,8 +1109,13 @@ void BusHub75Matrix::show(void) {
       if (getBitFromArray(_ledsDirty, pix) == true) {        // only repaint the "dirty"  pixels
         CRGB c = _ledBuffer[pix];
         //c.nscale8_video(_bri); // apply brightness
-        if (_isVirtual) virtualDisp->drawPixelRGB888(int16_t(x), int16_t(y), c.r, c.g, c.b);
-        else                display->drawPixelRGB888(int16_t(x), int16_t(y), c.r, c.g, c.b);
+        int yd = y;
+#ifdef WLED_HUB75_QS_ROW_SWAP
+        // panel-specific: some 1/8-scan QS panels have their 8-row bands swapped vs FOUR_SCAN_32PX_HIGH
+        if (getType() == TYPE_HUB75MATRIX_QS) yd ^= WLED_HUB75_QS_ROW_SWAP;
+#endif
+        if (_isVirtual) virtualDisp->drawPixelRGB888(int16_t(x), int16_t(yd), c.r, c.g, c.b);
+        else                display->drawPixelRGB888(int16_t(x), int16_t(yd), c.r, c.g, c.b);
       }
       pix++;
     }
