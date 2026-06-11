@@ -354,6 +354,13 @@ Pro **5 modulů 64×32 = plochá matice 320×32** jsme upravili zdroják (vše v
 | UI: počet panelů ve sběrnici | `data/settings_leds.htm` (`LC.max` v HUB75 větvi L2/L3/L4, ~ř. 440) | `4` → `5` |
 | Typ rozměru panelu | [FX.h:974-975](wled00/FX.h#L974-L975) | `uint8_t width/height` → `uint16_t` |
 | UI: rozměr panelu 2D | `data/settings_2D.htm:65` (per-panel) + `:269` (generátor) | `255` / `128` → `512` |
+| 2D bounds check (revert do 1D!) | [FX_2Dfcn.cpp:38](wled00/FX_2Dfcn.cpp#L38) | `maxWidth/maxHeight > 255` → `> 512` |
+| ledmap.json clamp šířky/výšky | [FX_fcn.cpp:2048-2049](wled00/FX_fcn.cpp#L2048-L2049) | `min(...,255)` → `min(...,512)` |
+
+> **Symptom bez `FX_2Dfcn.cpp:38` fixu:** 2D Configuration po **Save spadne zpátky na „1D Strip".**
+> `setUpMatrix()` spočítá `maxWidth=320 > 255` → „2D Bounds error" → `isMatrix=false`.
+> `Segment::maxWidth/maxHeight` jsou `uint16_t`, takže 512 je v pohodě; produkt 320×32=10240
+> je pod `MAX_LEDS` (16384 na ESP32/S3).
 
 **Proč `uint16_t`:** `Panel.width/height` byly `uint8_t`, takže 320 přeteklo na 64
 (320 − 256). Projevilo se to jako „2D konfigurace se resetuje na 64 px" + červené pole 320
