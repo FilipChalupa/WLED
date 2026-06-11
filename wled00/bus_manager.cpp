@@ -821,8 +821,8 @@ BusHub75Matrix::BusHub75Matrix(const BusConfig &bc) : Bus(bc.type, bc.start, bc.
   // mxconfig.min_refresh_rate = 120;
 
   mxconfig.clkphase = bc.reversed;
-  // allow chain length up to 4, limit to prevent bad data from preventing boot due to low memory
-  mxconfig.chain_length = max(1U, min(chainLength, 4U));
+  // allow chain length up to 5, limit to prevent bad data from preventing boot due to low memory
+  mxconfig.chain_length = max(1U, min(chainLength, 5U));
 
   if (mxconfig.mx_height >= 64 && (mxconfig.chain_length > 1)) {
     DEBUGBUS_PRINTLN(F("WARNING, only single panel can be used of 64 pixel boards due to memory"));
