@@ -348,6 +348,11 @@ Stock WLED neumí HUB75 řetěz delší než **4 panely** ani 2D plochu širší
 Pro **5 modulů 64×32 = plochá matice 320×32** jsme upravili zdroják (vše v našem buildu;
 **při upstream update WLED znovu aplikovat / poslat jako PR**):
 
+> ✅ **OVĚŘENÝ RECEPT na 5 panelů (standardní panel):** vyjdi z commitu `aad60030`
+> (fungující 3-blok) a přidej **jen limit patche** níže (chain cap, uint16, 2D bounds, UI).
+> **Row-swap NECHCEŠ** — `-D WLED_HUB75_QS_ROW_SWAP` nech zakomentovaný. Tenhle build jede
+> na **3 i 5 panelů** běžného typu. Row-swap byl jen kvůli jednomu anomálnímu signu (viz níže).
+
 | Co | Soubor:řádek | Změna |
 |----|--------------|-------|
 | HUB75 chain cap | [bus_manager.cpp:825](wled00/bus_manager.cpp#L825) | `min(chainLength, 4U)` → `5U` |
@@ -356,9 +361,14 @@ Pro **5 modulů 64×32 = plochá matice 320×32** jsme upravili zdroják (vše v
 | UI: rozměr panelu 2D | `data/settings_2D.htm:65` (per-panel) + `:269` (generátor) | `255` / `128` → `512` |
 | 2D bounds check (revert do 1D!) | [FX_2Dfcn.cpp:38](wled00/FX_2Dfcn.cpp#L38) | `maxWidth/maxHeight > 255` → `> 512` |
 | ledmap.json clamp šířky/výšky | [FX_fcn.cpp:2048-2049](wled00/FX_fcn.cpp#L2048-L2049) | `min(...,255)` → `min(...,512)` |
-| **QS row-swap** (panel-specifické) | [bus_manager.cpp](wled00/bus_manager.cpp) `show()` + `setPixelColor()` | za flagem `-D WLED_HUB75_QS_ROW_SWAP=8`: `y ^= 8` v QS cestě |
+| **QS row-swap** (⚠️ DEFAULT VYPNUTO) | [bus_manager.cpp](wled00/bus_manager.cpp) `show()` + `setPixelColor()` | za flagem `-D WLED_HUB75_QS_ROW_SWAP=8`: `y ^= 8` v QS cestě — **jen pro anomální sign, běžný panel NECHCE** |
 
-### QS row-swap — panel-specifická oprava (5-blokový sign)
+### QS row-swap — VOLITELNÉ, jen pro jeden anomální 5-blokový sign
+
+> ⚠️ **Běžný panel tohle NEPOTŘEBUJE a nesmí mít flag zapnutý.** Ověřeno: standardní 3-blok
+> i 5-blok jedou správně bez row-swapu. Tahle sekce platí JEN pro ten jeden konkrétní sign
+> (jiný interní scan), u kterého navíc na 5 panelech vyšel ještě složitější scramble
+> (řádkový shift svázaný s blokem) — ten se nakonec **nedořešil**, panel odložen.
 
 **Symptom:** všechny řádky svítí, ale jsou **přeházené po 8-řádkových pásech** (0–7↔8–15, 16–23↔24–31).
 Testovací vzor (4 barevné pásy přes API) ukázal pořadí GRWB místo RGBW; jemnější 8-pásový
